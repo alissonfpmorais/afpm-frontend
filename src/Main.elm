@@ -144,8 +144,17 @@ updateWith toPageModel toMsg model ( subModel, subCmd ) =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+subscriptions model =
+    case model.pageModel of
+        Redirect _ ->
+            Sub.none
+
+        NotFound _ ->
+            Sub.none
+
+        Home subModel ->
+            Home.subscriptions subModel
+                |> Sub.map GotHomeMsg
 
 
 
