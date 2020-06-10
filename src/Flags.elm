@@ -1,6 +1,12 @@
-module Flags exposing (Flags, decode, default)
+module Flags exposing
+    ( Flags
+    , decode
+    , default
+    )
 
-import Json.Decode exposing (Decoder, succeed)
+import Flags.Window as Window exposing (Window)
+import Json.Decode as Decode exposing (Decoder)
+import Json.Decode.Pipeline as P
 
 
 
@@ -8,7 +14,7 @@ import Json.Decode exposing (Decoder, succeed)
 
 
 type alias Flags =
-    {}
+    { window : Window }
 
 
 
@@ -17,7 +23,7 @@ type alias Flags =
 
 default : Flags
 default =
-    {}
+    { window = Window.default }
 
 
 
@@ -26,4 +32,5 @@ default =
 
 decode : Decoder Flags
 decode =
-    succeed Flags
+    Decode.succeed Flags
+        |> P.required "window" Window.decode
