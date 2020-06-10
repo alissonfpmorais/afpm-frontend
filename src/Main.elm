@@ -3,6 +3,7 @@ module Main exposing (main)
 import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Flags
+import Flags.Window exposing (Window)
 import Html
 import Json.Decode as Decode
 import Page exposing (Page)
@@ -18,24 +19,38 @@ import Url exposing (Url)
 -- MODEL
 
 
-type Model
+type alias Model =
+    { window : Window
+    , pageModel : PageModel
+    }
+
+
+type PageModel
     = Redirect Session
     | NotFound Session
     | Home Home.Model
 
 
 init : Decode.Value -> Url -> Nav.Key -> ( Model, Cmd Msg )
-init flags url navKey =
+init encodedFlags url navKey =
     let
-        session =
-            case Decode.decodeValue Flags.decode flags of
+        flags =
+            case Decode.decodeValue Flags.decode encodedFlags of
                 Ok response ->
-                    Session.guest navKey response
+                    response
 
                 Err _ ->
-                    Session.guest navKey Flags.default
+                    Flags.default
+
+        session =
+            Session.guest navKey flags
+
+        model =
+            { window = flags.window
+            , pageModel = Redirect session
+            }
     in
-    changeRouteTo (Route.fromUrl url) (Redirect session)
+    changeRouteTo (Route.fromUrl url) model
 
 
 
@@ -49,9 +64,9 @@ type Msg
     | GotHomeMsg Home.Msg
 
 
-toSession : Model -> Session
-toSession model =
-    case model of
+toSession : PageModel -> Session
+toSession pageModel =
+    case pageModel of
         Redirect session ->
             session
 
@@ -66,29 +81,39 @@ changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute model =
     let
         session =
-            toSession model
+            toSession model.pageModel
     in
     case maybeRoute of
         Nothing ->
-            ( NotFound session, Cmd.none )
+            ( { model | pageModel = NotFound session }
+            , Cmd.none
+            )
 
         Just Route.NotFound ->
-            ( NotFound session, Cmd.none )
+            ( { model | pageModel = NotFound session }
+            , Cmd.none
+            )
 
         Just Route.Home ->
             Home.init session
-                |> updateWith Home GotHomeMsg
+                |> updateWith Home GotHomeMsg model
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model ) of
+    case ( msg, model.pageModel ) of
         ( NoOp, _ ) ->
             ( model, Cmd.none )
 
         ( ClickedLink (Browser.Internal url), _ ) ->
+            let
+                navKey =
+                    model.pageModel
+                        |> toSession
+                        |> Session.navKey
+            in
             ( model
-            , Nav.pushUrl (Session.navKey (toSession model)) (Url.toString url)
+            , Nav.pushUrl navKey (Url.toString url)
             )
 
         ( ClickedLink (Browser.External href), _ ) ->
@@ -101,15 +126,15 @@ update msg model =
 
         ( GotHomeMsg subMsg, Home subModel ) ->
             Home.update subMsg subModel
-                |> updateWith Home GotHomeMsg
+                |> updateWith Home GotHomeMsg model
 
         ( GotHomeMsg _, _ ) ->
             ( model, Cmd.none )
 
 
-updateWith : (subModel -> Model) -> (subMsg -> Msg) -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
-updateWith toModel toMsg ( subModel, subCmd ) =
-    ( toModel subModel
+updateWith : (subModel -> PageModel) -> (subMsg -> Msg) -> Model -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
+updateWith toPageModel toMsg model ( subModel, subCmd ) =
+    ( { model | pageModel = toPageModel subModel }
     , Cmd.map toMsg subCmd
     )
 
@@ -128,8 +153,8 @@ subscriptions _ =
 
 
 view : Model -> Document Msg
-view model =
-    case model of
+view { pageModel } =
+    case pageModel of
         Redirect _ ->
             viewPage (\_ -> NoOp) Redirect.view
 
