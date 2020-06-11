@@ -1,6 +1,7 @@
 module Page exposing (Page, view)
 
 import Browser exposing (Document)
+import Element exposing (Device)
 import Html exposing (Html, footer, header, main_, text)
 
 
@@ -11,6 +12,7 @@ import Html exposing (Html, footer, header, main_, text)
 type alias Page msg =
     { title : String
     , content : Html msg
+    , device : Device
     }
 
 

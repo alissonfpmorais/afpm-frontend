@@ -4,7 +4,8 @@ module Flags exposing
     , default
     )
 
-import Flags.Window as Window exposing (Window)
+import Element exposing (Device)
+import Flags.Device as Device
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline as P
 
@@ -14,7 +15,7 @@ import Json.Decode.Pipeline as P
 
 
 type alias Flags =
-    { window : Window }
+    { device : Device }
 
 
 
@@ -23,7 +24,7 @@ type alias Flags =
 
 default : Flags
 default =
-    { window = Window.default }
+    { device = Device.default }
 
 
 
@@ -33,4 +34,4 @@ default =
 decode : Decoder Flags
 decode =
     Decode.succeed Flags
-        |> P.required "window" Window.decode
+        |> P.required "window" Device.decode
