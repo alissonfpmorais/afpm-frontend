@@ -3,7 +3,7 @@ module Main exposing (main)
 import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Flags
-import Flags.Window exposing (Window)
+import Global
 import Html
 import Json.Decode as Decode
 import Page exposing (Page)
@@ -11,7 +11,7 @@ import Page.Home as Home exposing (Model, Msg)
 import Page.NotFound as NotFound
 import Page.Redirect as Redirect
 import Route exposing (Route)
-import Session exposing (Session)
+import Session
 import Url exposing (Url)
 
 
@@ -19,15 +19,9 @@ import Url exposing (Url)
 -- MODEL
 
 
-type alias Model =
-    { window : Window
-    , pageModel : PageModel
-    }
-
-
-type PageModel
-    = Redirect Session
-    | NotFound Session
+type Model
+    = Redirect Redirect.Model
+    | NotFound NotFound.Model
     | Home Home.Model
 
 
@@ -42,15 +36,15 @@ init encodedFlags url navKey =
                 Err _ ->
                     Flags.default
 
-        session =
-            Session.guest navKey flags
-
-        model =
-            { window = flags.window
-            , pageModel = Redirect session
+        global =
+            { session = Session.guest navKey flags
+            , device = flags.device
             }
     in
-    changeRouteTo (Route.fromUrl url) model
+    global
+        |> Redirect.init
+        |> Redirect
+        |> changeRouteTo (Route.fromUrl url)
 
 
 
@@ -61,59 +55,56 @@ type Msg
     = NoOp
     | ChangedUrl Url
     | ClickedLink Browser.UrlRequest
+    | GotNotFoundMsg NotFound.Msg
     | GotHomeMsg Home.Msg
 
 
-toSession : PageModel -> Session
-toSession pageModel =
-    case pageModel of
-        Redirect session ->
-            session
+toGlobal : Model -> Global.Model
+toGlobal model =
+    case model of
+        Redirect subModel ->
+            Redirect.toGlobal subModel
 
-        NotFound session ->
-            session
+        NotFound subModel ->
+            NotFound.toGlobal subModel
 
         Home subModel ->
-            Home.toSession subModel
+            Home.toGlobal subModel
 
 
 changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute model =
     let
-        session =
-            toSession model.pageModel
+        global =
+            toGlobal model
     in
     case maybeRoute of
         Nothing ->
-            ( { model | pageModel = NotFound session }
-            , Cmd.none
-            )
+            NotFound.init global
+                |> updateWith NotFound GotNotFoundMsg
 
         Just Route.NotFound ->
-            ( { model | pageModel = NotFound session }
-            , Cmd.none
-            )
+            NotFound.init global
+                |> updateWith NotFound GotNotFoundMsg
 
         Just Route.Home ->
-            Home.init session
-                |> updateWith Home GotHomeMsg model
+            Home.init global
+                |> updateWith Home GotHomeMsg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model.pageModel ) of
+    case ( msg, model ) of
         ( NoOp, _ ) ->
             ( model, Cmd.none )
 
         ( ClickedLink (Browser.Internal url), _ ) ->
             let
-                navKey =
-                    model.pageModel
-                        |> toSession
-                        |> Session.navKey
+                global =
+                    toGlobal model
             in
             ( model
-            , Nav.pushUrl navKey (Url.toString url)
+            , Nav.pushUrl (Session.navKey global.session) (Url.toString url)
             )
 
         ( ClickedLink (Browser.External href), _ ) ->
@@ -124,17 +115,24 @@ update msg model =
         ( ChangedUrl url, _ ) ->
             changeRouteTo (Route.fromUrl url) model
 
+        ( GotNotFoundMsg subMsg, NotFound subModel ) ->
+            NotFound.update subMsg subModel
+                |> updateWith NotFound GotNotFoundMsg
+
+        ( GotNotFoundMsg _, _ ) ->
+            ( model, Cmd.none )
+
         ( GotHomeMsg subMsg, Home subModel ) ->
             Home.update subMsg subModel
-                |> updateWith Home GotHomeMsg model
+                |> updateWith Home GotHomeMsg
 
         ( GotHomeMsg _, _ ) ->
             ( model, Cmd.none )
 
 
-updateWith : (subModel -> PageModel) -> (subMsg -> Msg) -> Model -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
-updateWith toPageModel toMsg model ( subModel, subCmd ) =
-    ( { model | pageModel = toPageModel subModel }
+updateWith : (subModel -> Model) -> (subMsg -> Msg) -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
+updateWith toModel toMsg ( subModel, subCmd ) =
+    ( toModel subModel
     , Cmd.map toMsg subCmd
     )
 
@@ -145,7 +143,7 @@ updateWith toPageModel toMsg model ( subModel, subCmd ) =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model.pageModel of
+    case model of
         Redirect _ ->
             Sub.none
 
@@ -162,23 +160,24 @@ subscriptions model =
 
 
 view : Model -> Document Msg
-view { pageModel } =
-    case pageModel of
-        Redirect _ ->
-            viewPage (\_ -> NoOp) Redirect.view
+view model =
+    case model of
+        Redirect subModel ->
+            viewPage (\_ -> NoOp) (Redirect.view subModel)
 
-        NotFound _ ->
-            viewPage (\_ -> NoOp) NotFound.view
+        NotFound subModel ->
+            viewPage (\_ -> NoOp) (NotFound.view subModel)
 
         Home homeModel ->
             viewPage GotHomeMsg (Home.view homeModel)
 
 
 viewPage : (msg -> Msg) -> Page msg -> Document Msg
-viewPage toMsg { title, content } =
+viewPage toMsg { title, content, device } =
     Page.view
         { title = title
         , content = Html.map toMsg content
+        , device = device
         }
 
 

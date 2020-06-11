@@ -1,8 +1,8 @@
-module Page.Home exposing (Model, Msg(..), init, subscriptions, toSession, update, view)
+module Page.Home exposing (Model, Msg, init, subscriptions, toGlobal, update, view)
 
+import Global
 import Html exposing (text)
 import Page exposing (Page)
-import Session exposing (Session)
 
 
 
@@ -10,16 +10,16 @@ import Session exposing (Session)
 
 
 type Model
-    = Model Session Internals
+    = Model Global.Model Internals
 
 
 type alias Internals =
     {}
 
 
-init : Session -> ( Model, Cmd Msg )
-init session =
-    ( Model session {}
+init : Global.Model -> ( Model, Cmd Msg )
+init global =
+    ( Model global {}
     , Cmd.none
     )
 
@@ -32,11 +32,9 @@ type Msg
     = NoOp
 
 
-toSession : Model -> Session
-toSession model =
-    case model of
-        Model session _ ->
-            session
+toGlobal : Model -> Global.Model
+toGlobal (Model global _) =
+    global
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -60,7 +58,8 @@ subscriptions _ =
 
 
 view : Model -> Page Msg
-view _ =
+view (Model global _) =
     { title = "Home"
     , content = text ""
+    , device = global.device
     }
