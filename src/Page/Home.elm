@@ -60,6 +60,6 @@ subscriptions _ =
 view : Model -> Page Msg
 view (Model global _) =
     { title = "Home"
-    , content = text ""
+    , content = text "home"
     , device = global.device
     }
